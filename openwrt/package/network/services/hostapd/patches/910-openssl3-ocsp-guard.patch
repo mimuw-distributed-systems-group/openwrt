@@ -1,0 +1,14 @@
+Don't define HAVE_OCSP when OpenSSL is built with no-ocsp (OPENSSL_NO_OCSP),
+otherwise tls_openssl.c uses OCSP types that ocsp.h doesn't declare.
+
+--- a/src/crypto/tls_openssl.c
++++ b/src/crypto/tls_openssl.c
+@@ -74,7 +74,7 @@ typedef int stack_index_t;
+ #endif
+
+ #ifdef SSL_set_tlsext_status_type
+-#ifndef OPENSSL_NO_TLSEXT
++#if !defined(OPENSSL_NO_TLSEXT) && !defined(OPENSSL_NO_OCSP)
+ #define HAVE_OCSP
+ #include <openssl/ocsp.h>
+ #endif /* OPENSSL_NO_TLSEXT */
