@@ -111,19 +111,17 @@
 
           vled1 {
             gpio-export,name = "vled1";
-            gpio-export,direction_may_change; /* The GPIO can be also used as a VButton. */
             gpios = <&gpio0 11 0>;
           };
 
           vled2 {
             gpio-export,name = "vled2";
-            gpio-export,direction_may_change; /* The GPIO can be also used as a VButton. */
             gpios = <&gpio0 13 0>;
           };
 
           buf_en {
             gpio-export,name = "buf_en";
-            gpio-export,output = <1>;
+            gpio-export,output = <0>;
             gpios = <&gpio0 12 1>;
           };
 
@@ -143,14 +141,8 @@
 
           node_power {
             gpio-export,name = "node_power";
-            gpio-export,output = <1>;
+            gpio-export,output = <0>;
             gpios = <&gpio0 0 1>;
-          };
-
-          jtag_tdo {
-            gpio-export,name = "jtag_tdo";
-            gpio-export,direction_may_change;
-            gpios = <&gpio0 18 0>;
           };
         };
 
