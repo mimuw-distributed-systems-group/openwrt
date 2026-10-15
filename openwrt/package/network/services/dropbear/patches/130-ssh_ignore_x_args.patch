@@ -1,0 +1,13 @@
+--- a/src/cli-runopts.c	2026-08-16 16:11:38.392653192 +0200
++++ b/src/cli-runopts.c	2026-08-16 16:11:38.414287622 +0200
+@@ -352,6 +352,10 @@
+ 				case 'z':
+ 					opts.disable_ip_tos = 1;
+ 					break;
++				case 'x':
++					/* compatibility with openssh cli
++					 * ("-x" disables X11 forwarding) */
++					break;
+ 				default:
+ 					fprintf(stderr,
+ 						"WARNING: Ignoring unknown option -%c\n", c);

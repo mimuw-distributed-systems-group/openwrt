@@ -8,27 +8,31 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=dropbear
-PKG_VERSION:=2015.67
+
+# OpenWrt's old dropbear patches are included upstream by now; the
+# authorized_keys directory is set with -D in files/dropbear.init.
+PKG_VERSION:=2026.94
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
 PKG_SOURCE_URL:= \
-	http://matt.ucc.asn.au/dropbear/releases/ \
+	https://matt.ucc.asn.au/dropbear/releases/ \
 	https://dropbear.nl/mirror/releases/
-PKG_MD5SUM:=e967e320344cd4bfebe321e3ab8514d6
+PKG_HASH:=e098034a843699200c8c977a991fff73159735bf795d5f72ef672c41a6b1ae81
 
 PKG_LICENSE:=MIT
 PKG_LICENSE_FILES:=LICENSE libtomcrypt/LICENSE libtommath/LICENSE
 
 PKG_BUILD_PARALLEL:=1
 PKG_USE_MIPS16:=0
+PKG_FIXUP:=autoreconf
 
 PKG_CONFIG_DEPENDS:=CONFIG_DROPBEAR_ECC
 
 include $(INCLUDE_DIR)/package.mk
 
 define Package/dropbear/Default
-  URL:=http://matt.ucc.asn.au/dropbear/
+  URL:=https://matt.ucc.asn.au/dropbear/
 endef
 
 define Package/dropbear/config
@@ -47,9 +51,10 @@ define Package/dropbear/description
 endef
 
 define Package/dropbear/conffiles
+/etc/dropbear/dropbear_ed25519_host_key
 /etc/dropbear/dropbear_rsa_host_key
-/etc/dropbear/dropbear_dss_host_key 
-/etc/config/dropbear 
+$(if $(CONFIG_DROPBEAR_ECC),/etc/dropbear/dropbear_ecdsa_host_key)
+/etc/config/dropbear
 endef
 
 define Package/dropbearconvert
@@ -75,22 +80,19 @@ CONFIGURE_ARGS += \
 	--disable-zlib \
 	--enable-bundled-libtom
 
-TARGET_CFLAGS += -DARGTYPE=3 -ffunction-sections -fdata-sections
+# gcc 4.8 defaults to C89, the post-quantum key exchange code needs C99.
+TARGET_CFLAGS += -std=gnu99 -DARGTYPE=3 -ffunction-sections -fdata-sections
 TARGET_LDFLAGS += -Wl,--gc-sections
 
+# DSS is deprecated upstream and files/dropbear.init doesn't create its key.
 define Build/Configure
-	$(Build/Configure/Default)
+	: > $(PKG_BUILD_DIR)/localoptions.h
+	echo '#define DROPBEAR_DSS 0' >> $(PKG_BUILD_DIR)/localoptions.h
+	echo '#define DROPBEAR_ECDSA $(if $(CONFIG_DROPBEAR_ECC),1,0)' >> $(PKG_BUILD_DIR)/localoptions.h
+	echo '#define DROPBEAR_ECDH $(if $(CONFIG_DROPBEAR_ECC),1,0)' >> $(PKG_BUILD_DIR)/localoptions.h
+	echo '#define DROPBEAR_CURVE25519 $(if $(CONFIG_DROPBEAR_ECC),1,0)' >> $(PKG_BUILD_DIR)/localoptions.h
 
-	# Enforce that all replacements are made, otherwise options.h has changed
-	# format and this logic is broken.
-	for OPTION in DROPBEAR_ECDSA DROPBEAR_ECDH DROPBEAR_CURVE25519; do \
-	  awk 'BEGIN { rc = 1 } \
-	       /'$$$$OPTION'/ { $$$$0 = "$(if $(CONFIG_DROPBEAR_ECC),,// )#define '$$$$OPTION'"; rc = 0 } \
-	       { print } \
-	       END { exit(rc) }' $(PKG_BUILD_DIR)/options.h \
-	       >$(PKG_BUILD_DIR)/options.h.new && \
-	  mv $(PKG_BUILD_DIR)/options.h.new $(PKG_BUILD_DIR)/options.h || exit 1; \
-	done
+	$(Build/Configure/Default)
 endef
 
 define Build/Compile
@@ -117,8 +119,9 @@ define Package/dropbear/install
 	$(INSTALL_BIN) ./files/dropbear.init $(1)/etc/init.d/dropbear
 	$(INSTALL_DIR) $(1)/usr/lib/opkg/info
 	$(INSTALL_DIR) $(1)/etc/dropbear
+	touch $(1)/etc/dropbear/dropbear_ed25519_host_key
 	touch $(1)/etc/dropbear/dropbear_rsa_host_key
-	touch $(1)/etc/dropbear/dropbear_dss_host_key
+	$(if $(CONFIG_DROPBEAR_ECC),touch $(1)/etc/dropbear/dropbear_ecdsa_host_key)
 endef
 
 define Package/dropbearconvert/install
