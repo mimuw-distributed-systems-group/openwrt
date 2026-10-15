@@ -45,6 +45,7 @@ enum {
 	NLA_FLAG,	/**< Flag */
 	NLA_MSECS,	/**< Micro seconds (64bit) */
 	NLA_NESTED,	/**< Nested attributes */
+	NLA_S8,		/**< 8 bit signed integer */
 	__NLA_TYPE_MAX,
 };
 
@@ -271,6 +272,15 @@ static inline int nla_put_u8(struct nl_msg *msg, int attrtype, uint8_t value)
 static inline uint8_t nla_get_u8(struct nlattr *nla)
 {
 	return *(uint8_t *) nla_data(nla);
+}
+
+/**
+ * Return value of signed 8 bit integer attribute.
+ * @arg nla		Attribute of type NLA_S8.
+ */
+static inline int8_t nla_get_s8(struct nlattr *nla)
+{
+	return *(int8_t *) nla_data(nla);
 }
 
 /**
