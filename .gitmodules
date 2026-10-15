@@ -1,0 +1,4 @@
+[submodule "heni-software"]
+	path = heni-software
+	url = gitea@192.168.8.100:heni/heni-heni.git
+	branch = image-23-backport
