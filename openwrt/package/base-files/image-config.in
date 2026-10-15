@@ -153,6 +153,28 @@ if VERSIONOPT
 			Should be the same as in <heni-git>/software/supervisor/images/.
 			If unspecified, it defaults to image-dev.
 
+	config HENI_VPN_HOST
+		string
+		prompt "HENI VPN server host"
+		default "193.0.109.49"
+		help
+			Address of the HENI VPN server the OpenVPN client connects to.
+
+	config HENI_SERVER_HOST
+		string
+		prompt "HENI server address (tunnel side)"
+		default "172.23.2.1"
+		help
+			Address of the HENI server inside the VPN tunnel, used as "heni"
+			in /etc/hosts and by monitoring-client and log-upload.
+
+	config HENI_FALLBACK_URL
+		string
+		prompt "Fallback client base URL"
+		default "https://heni.mimuw.edu.pl"
+		help
+			Base URL that fallback-client polls for a recovery script.
+
 	config VERSION_DIST
 		string
 		prompt "Release distribution"

@@ -1,1 +1,3 @@
 127.0.0.1 localhost
+# HENI server's tunnel-side address
+172.23.2.1 heni

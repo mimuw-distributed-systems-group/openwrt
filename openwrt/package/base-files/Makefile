@@ -19,6 +19,9 @@ PKG_LICENSE:=GPL-2.0
 
 PKG_CONFIG_DEPENDS := CONFIG_SIGNED_PACKAGES
 
+# HENI server's tunnel-side address, written to /etc/hosts as "heni"
+HENI_SERVER_HOST:=$(if $(CONFIG_HENI_SERVER_HOST),$(call qstrip,$(CONFIG_HENI_SERVER_HOST)),172.23.2.1)
+
 include $(INCLUDE_DIR)/package.mk
 
 ifneq ($(DUMP),1)
@@ -138,6 +141,8 @@ define Package/base-files/install
 	$(VERSION_SED_SCRIPT) \
 		$(1)/etc/openwrt_release \
 		$(1)/etc/device_info
+
+	sed -i "s/172\.23\.2\.1/$(HENI_SERVER_HOST)/g" $(1)/etc/hosts
 
 	mkdir -p $(1)/CONTROL
 	mkdir -p $(1)/dev
