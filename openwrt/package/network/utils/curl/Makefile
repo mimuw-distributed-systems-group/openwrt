@@ -8,17 +8,12 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=curl
-PKG_VERSION:=7.40.0
-PKG_RELEASE:=3
+PKG_VERSION:=7.88.1
+PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
-PKG_SOURCE_URL:=http://curl.haxx.se/download/ \
-	http://www.mirrorspace.org/curl/ \
-	ftp://ftp.sunet.se/pub/www/utilities/curl/ \
-	ftp://ftp.planetmirror.com/pub/curl/ \
-	http://www.mirrormonster.com/curl/download/ \
-	http://curl.mirrors.cyberservers.net/download/
-PKG_MD5SUM:=8d30594212e65657a5c32030f0998fa9
+PKG_SOURCE_URL:=https://curl.se/download/
+PKG_HASH:=8224b45cce12abde039c12dc0711b7ea85b104b9ad534d6e4c5b4e188a61c907
 
 PKG_LICENSE:=MIT
 PKG_LICENSE_FILES:=COPYING
@@ -99,24 +94,25 @@ endef
 
 TARGET_CFLAGS += $(FPIC)
 
+# Set the CA bundle path at build time; callers such as fallback-client
+# don't pass --cacert.
 CONFIGURE_ARGS += \
 	--disable-debug \
 	--disable-ares \
 	--enable-shared \
 	--enable-static \
 	--disable-manual \
-	--without-ca-bundle \
 	--without-nss \
-	--without-libmetalink \
 	--without-librtmp \
+	--with-ca-bundle=/etc/ssl/certs/ca-certificates.crt \
 	\
 	$(call autoconf_bool,CONFIG_IPV6,ipv6) \
 	\
-	$(if $(CONFIG_LIBCURL_AXTLS),--with-axtls="$(STAGING_DIR)/usr" --without-ca-path,--without-axtls) \
-	$(if $(CONFIG_LIBCURL_CYASSL),--with-cyassl="$(STAGING_DIR)/usr" --without-ca-path,--without-cyassl) \
-	$(if $(CONFIG_LIBCURL_GNUTLS),--with-gnutls="$(STAGING_DIR)/usr" --without-ca-path,--without-gnutls) \
-	$(if $(CONFIG_LIBCURL_OPENSSL),--with-ssl="$(STAGING_DIR)/usr" --with-ca-path=/etc/ssl/certs,--without-ssl) \
-	$(if $(CONFIG_LIBCURL_POLARSSL),--with-polarssl="$(STAGING_DIR)/usr" --with-ca-path=/etc/ssl/certs,--without-polarssl) \
+	$(if $(CONFIG_LIBCURL_AXTLS),--with-axtls="$(STAGING_DIR)/usr",--without-axtls) \
+	$(if $(CONFIG_LIBCURL_CYASSL),--with-cyassl="$(STAGING_DIR)/usr",--without-cyassl) \
+	$(if $(CONFIG_LIBCURL_GNUTLS),--with-gnutls="$(STAGING_DIR)/usr",--without-gnutls) \
+	$(if $(CONFIG_LIBCURL_OPENSSL),--with-ssl="$(STAGING_DIR)/usr",--without-ssl) \
+	$(if $(CONFIG_LIBCURL_POLARSSL),--with-polarssl="$(STAGING_DIR)/usr",--without-polarssl) \
 	\
 	$(if $(CONFIG_LIBCURL_LIBIDN),--with-libidn="$(STAGING_DIR)/usr",--without-libidn) \
 	$(if $(CONFIG_LIBCURL_SSH2),--with-libssh2="$(STAGING_DIR)/usr",--without-libssh2) \
