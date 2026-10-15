@@ -1,0 +1,21 @@
+uClibc 0.9.33.2's <assert.h> predates C11 and does not define the
+static_assert() macro, even when built with -std=gnu11 (which only
+makes the compiler accept the _Static_assert keyword -- it does not
+add the libc macro that spells it "static_assert"). auth_token.c,
+mroute.h and socket.c all use the bare static_assert() spelling, so
+provide the missing macro ourselves.
+
+--- a/src/compat/compat.h
++++ b/src/compat/compat.h
+@@ -21,6 +21,11 @@
+ #ifndef COMPAT_H
+ #define COMPAT_H
+
++#include <assert.h>
++#ifndef static_assert
++#define static_assert _Static_assert
++#endif
++
+ #ifdef _WIN32
+ #include <winsock2.h>
+ #include <ws2tcpip.h>
