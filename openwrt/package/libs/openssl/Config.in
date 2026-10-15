@@ -11,18 +11,11 @@ config OPENSSL_WITH_EC2M
         depends on OPENSSL_WITH_EC
         prompt "Enable ec2m support"
 
-config OPENSSL_WITH_SSL3
+config OPENSSL_WITH_DEPRECATED
 	bool
-	default n
-	prompt "Enable sslv3 support"
-
-config OPENSSL_ENGINE_CRYPTO
-	bool
-	prompt "Crypto acceleration support"
-
-config OPENSSL_ENGINE_DIGEST
-	bool
-	depends on OPENSSL_ENGINE_CRYPTO
-	prompt "Digests acceleration support"
+	default y
+	prompt "Include deprecated APIs"
+	help
+	  This drops all deprecated API, including engine support.
 
 endmenu
