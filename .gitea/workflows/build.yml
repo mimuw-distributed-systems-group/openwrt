@@ -1,0 +1,168 @@
+name: build
+
+on:
+  push:
+    # ak/** so feature/backport branches (this project's established
+    # naming convention) get CI too, not just image-23 -- previously the
+    # only way to build one was workflow_dispatch, which needs a token
+    # scope (write:repository) not every contributor's token has.
+    branches: [image-23, "ak/**"]
+  workflow_dispatch: {}
+
+# One push per branch cancels any in-progress run for it.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Runs here, not inside heni_supervisor:buildroot -- that image lacks
+    # Node/curl/a recent-enough git for CI steps. It's only used via
+    # `docker` below for the actual feeds/build commands.
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        include:
+          - variant: prod
+            vpn_host: "193.0.109.49"
+            server_host: "172.23.2.1"
+            fallback_url: "https://heni.mimuw.edu.pl"
+          - variant: dev
+            vpn_host: "192.168.0.249"
+            server_host: "192.168.0.249"
+            fallback_url: "http://192.168.0.249"
+
+    steps:
+      # heni-software submodule is fetched over SSH; needs repo secret
+      # HENI_HENI_DEPLOY_KEY authorized on the heni-heni repo.
+      - name: Configure SSH for submodule checkout
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HENI_HENI_DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 192.168.8.100 >> ~/.ssh/known_hosts
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Not `recursive` -- heni-software has its own broken nested
+          # submodule unrelated to what this build needs.
+          submodules: true
+          persist-credentials: false
+
+      # Preserved openwrt/dl/ cache, mirroring heni-image-original-fixed's
+      # setup -- same underlying openwrt fork, same dead git:// mirrors
+      # (mtd-utils, linux-firmware, hostapd, usign), plus the newer
+      # package versions this backport bumped to (OpenSSL, OpenVPN,
+      # dropbear, curl, ca-certificates, libevent2, libcap-ng). Plain
+      # `git clone`, not actions/checkout's `repository:` input -- that
+      # always builds a `git@<host>` SSH URL, but this Gitea's SSH user
+      # is `gitea@` (see .gitmodules), so it fails auth regardless of key.
+      - name: Checkout preserved sources
+        run: git clone --depth 1 -b image-23 gitea@192.168.8.100:heni/heni-image-sources.git heni-image-sources
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER }}" --password-stdin
+
+      - name: Build image
+        # Workspace gets tar'd into the container as the heni user (not
+        # -v: runner's Docker socket is the host's, so paths don't
+        # resolve; not docker cp: preserves UIDs the image user can't
+        # chown, and this host has userns-remap so root can't chown at
+        # all). Extracted to a fresh /home/heni/build, not the image's
+        # baked-in /home/heni/openwrt, to avoid colliding with that
+        # tree's stale files and its default exec WORKDIR.
+        run: |
+          # A cancelled run (concurrency cancel-in-progress, on a
+          # follow-up push) kills this step hard enough that the `trap`
+          # cleanup below never runs, leaking a multi-GB container that
+          # fills the runner's disk. Sweep up any leftovers from a prior
+          # run before starting a new one.
+          # Named per-repo, filtered by that same name -- not by the
+          # (shared) image name. heni-image-original-fixed's CI also
+          # filters by ancestor=...buildroot on the same runner host; a
+          # same-image sweep can (and did) kill the sibling repo's
+          # freshly created container mid-run when both jobs happened
+          # to land on the runner around the same time.
+          docker ps -aq --filter name=heni-image-backport-build-${{ matrix.variant }} | xargs -r docker rm -f
+          # ccache dir bind-mounted from the actual runner host (not the
+          # CI job's own workspace -- that wouldn't resolve) so it
+          # survives this container being swept and recreated fresh
+          # every run. Host path must pre-exist, world-writable
+          # (userns-remap on this host means root inside the container
+          # can't chown it after the fact).
+          CID=$(docker create --name heni-image-backport-build-${{ matrix.variant }} \
+            -v /var/lib/gitea-buildcache/heni-image-backport-ccache:/home/heni/.ccache \
+            ghcr.io/mimuw-distributed-systems-group/heni_supervisor:buildroot sleep infinity)
+          trap 'docker rm -f "$CID"' EXIT
+          docker start "$CID"
+          docker exec -u heni -w /home/heni "$CID" mkdir -p /home/heni/build
+          tar -cf - -C "$GITHUB_WORKSPACE" --exclude=heni-image-sources . | docker exec -u heni -i -w /home/heni "$CID" tar --no-same-owner -xf - -C /home/heni/build
+          docker exec -u heni "$CID" mkdir -p /home/heni/build/openwrt/dl
+          tar -cf - -C "$GITHUB_WORKSPACE/heni-image-sources/dl" . | docker exec -u heni -i "$CID" tar --no-same-owner -xf - -C /home/heni/build/openwrt/dl
+
+          # ca-certificates needs host python3 to run certdata2pem.py; the
+          # image doesn't have it (Ubuntu 16.04 base, not rebuilt to
+          # include it). heni has passwordless sudo.
+          docker exec -u heni "$CID" sudo bash -c "apt-get update -qq && apt-get install -y python3 python3-cryptography ccache"
+
+          # The image's own baked-in /home/heni/openwrt/feeds already has
+          # packages/luci/routing/telephony/management fully cloned and
+          # indexed -- reuse it instead of `scripts/feeds update -a`,
+          # which would otherwise try to git-pull all of those from
+          # GitHub. Only `heni` (our local src-link feed) needs indexing,
+          # which is a purely local operation.
+          docker exec -u heni "$CID" bash -c 'cp -r /home/heni/openwrt/feeds/. /home/heni/build/openwrt/feeds/'
+
+          docker exec -u heni "$CID" git config --global --add safe.directory '*'
+          docker exec -u heni -w /home/heni/build/openwrt "$CID" bash -c '
+            set -e
+            scripts/feeds update heni
+            scripts/feeds install -a
+
+            # This is the actual recipe from the image build Dockerfile
+            # (mimuw-distributed-systems-group/docker-images/
+            # supervisor_image/Dockerfile) -- feeds install can leave
+            # .config disturbed, so re-checking it out from git discards
+            # that before the one real sync. Verified (on the sibling
+            # heni-image-original-fixed repo) via full diff against the
+            # committed .config: zero unexpected losses, zero
+            # unexpected additions.
+            git checkout -- .config
+            sed -i "s|^CONFIG_HENI_VPN_HOST=.*|CONFIG_HENI_VPN_HOST=\"${{ matrix.vpn_host }}\"|" .config
+            sed -i "s|^CONFIG_HENI_SERVER_HOST=.*|CONFIG_HENI_SERVER_HOST=\"${{ matrix.server_host }}\"|" .config
+            sed -i "s|^CONFIG_HENI_FALLBACK_URL=.*|CONFIG_HENI_FALLBACK_URL=\"${{ matrix.fallback_url }}\"|" .config
+            make oldconfig < /dev/null
+
+            # CONFIG_CCACHE makes rules.mk set TARGET_CC/TARGET_CXX to
+            # the bare names ccache_cc/ccache_cxx. TARGET_CC_NOCACHE/
+            # TARGET_CXX_NOCACHE are exported by rules.mk specifically
+            # for wrappers like this to call through to the real
+            # compiler on a cache miss.
+            TOOLCHAIN_BIN=$(echo staging_dir/toolchain-*/bin)
+            MASQ=/tmp/ccache-masq
+            mkdir -p "$MASQ"
+            printf "#!/bin/sh\nexec ccache \"\$TARGET_CC_NOCACHE\" \"\$@\"\n" > "$MASQ/ccache_cc"
+            printf "#!/bin/sh\nexec ccache \"\$TARGET_CXX_NOCACHE\" \"\$@\"\n" > "$MASQ/ccache_cxx"
+            chmod +x "$MASQ/ccache_cc" "$MASQ/ccache_cxx"
+
+            export PATH="$MASQ:$TOOLCHAIN_BIN:$PATH"
+
+            if make -j"$(nproc)"; then
+              exit 0
+            fi
+            if make -j"$(nproc)" V=s; then
+              exit 0
+            fi
+            make -j1 V=s
+          '
+          docker cp "$CID:/home/heni/build/openwrt/bin" openwrt/bin
+
+      - name: Upload image artifact
+        # v4 (and the underlying @actions/artifact v2 API) isn't
+        # supported on this Gitea version -- needs the older API v3 uses.
+        uses: actions/upload-artifact@v3
+        with:
+          name: heni-image-backport-${{ matrix.variant }}
+          path: openwrt/bin/ramips/
