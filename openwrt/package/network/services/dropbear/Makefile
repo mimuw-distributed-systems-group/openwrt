@@ -9,8 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=dropbear
 
-# OpenWrt's old dropbear patches are included upstream by now; the
-# authorized_keys directory is set with -D in files/dropbear.init.
+# The authorized_keys directory is set with -D in files/dropbear.init.
 PKG_VERSION:=2026.94
 PKG_RELEASE:=1
 
@@ -91,6 +90,7 @@ define Build/Configure
 	echo '#define DROPBEAR_ECDSA $(if $(CONFIG_DROPBEAR_ECC),1,0)' >> $(PKG_BUILD_DIR)/localoptions.h
 	echo '#define DROPBEAR_ECDH $(if $(CONFIG_DROPBEAR_ECC),1,0)' >> $(PKG_BUILD_DIR)/localoptions.h
 	echo '#define DROPBEAR_CURVE25519 $(if $(CONFIG_DROPBEAR_ECC),1,0)' >> $(PKG_BUILD_DIR)/localoptions.h
+	echo '#define DEFAULT_PATH "/usr/sbin:/usr/bin:/sbin:/bin"' >> $(PKG_BUILD_DIR)/localoptions.h
 
 	$(Build/Configure/Default)
 endef
