@@ -1,0 +1,12 @@
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -19,7 +19,8 @@
+ #   Steve Grubb <sgrubb@redhat.com>
+ #
+ ACLOCAL_AMFLAGS = -I m4
+-SUBDIRS = src utils m4 docs
++# utils/ (the pscap binary) isn't needed by anything, otherwise it causes build problems
++SUBDIRS = src m4 docs
+ if HAVE_SWIG
+ SUBDIRS += bindings
+ endif

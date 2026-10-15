@@ -1,0 +1,40 @@
+uClibc 0.9.33.2 has no <sys/xattr.h> and no fgetxattr/fsetxattr/fremovexattr.
+cap-ng.c means to leave file capabilities out in that case, but VFS_CAP_U32
+is defined again further down, so that code is still compiled, and it uses
+the xattr functions and FIXUP(), which never got defined.
+
+Define them here: the xattr functions as direct syscalls (the kernel has
+them, only the libc wrappers are missing), FIXUP() the same way upstream does.
+
+--- a/src/cap-ng.c
++++ b/src/cap-ng.c
+@@ -104,6 +104,29 @@
+  #endif
+ #endif
+
++#if !defined(HAVE_SYS_XATTR_H) && !defined(HAVE_ATTR_XATTR_H)
++#include <sys/syscall.h>
++#include <unistd.h>
++static ssize_t fgetxattr(int fd, const char *name, void *value, size_t size)
++{
++	return syscall(SYS_fgetxattr, fd, name, value, size);
++}
++static int fsetxattr(int fd, const char *name, const void *value,
++		      size_t size, int flags)
++{
++	return syscall(SYS_fsetxattr, fd, name, value, size, flags);
++}
++static int fremovexattr(int fd, const char *name)
++{
++	return syscall(SYS_fremovexattr, fd, name);
++}
++#if __BYTE_ORDER == __BIG_ENDIAN
++#define FIXUP(x) bswap_32(x)
++#else
++#define FIXUP(x) (x)
++#endif
++#endif
++
+ #ifndef _LINUX_CAPABILITY_VERSION_1
+ #define _LINUX_CAPABILITY_VERSION_1 0x19980330
+ #endif
