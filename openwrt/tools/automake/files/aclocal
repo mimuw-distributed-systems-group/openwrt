@@ -1,2 +1,5 @@
 #!/usr/bin/env sh
-aclocal.real $ACLOCAL_INCLUDE $@
+# staging_dir/host/bin is not always on PATH, so call aclocal.real from
+# this script's directory.
+d=$(dirname "$0")
+"$d/aclocal.real" $ACLOCAL_INCLUDE "$@"
